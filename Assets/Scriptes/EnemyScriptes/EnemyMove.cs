@@ -11,7 +11,6 @@ public class EnemyMove : MonoBehaviour
     public int sameDirectionCount = 0;
     public int beforeDirection;
     Vector2 front = Vector2.left;
-    Vector2 boxSize = new Vector2(12f, 4f);
     bool noPlatForm;
     bool followPlayer;
     bool isFoundPlayer = false;
@@ -19,10 +18,10 @@ public class EnemyMove : MonoBehaviour
     RaycastHit2D frontRayHit2;
     
     RaycastHit2D checkWall;
+    bool isWall = false;
     RaycastHit2D rayHit;
     GameObject player; // 플레이어 객체
     public PlayerMove playerMove;
-    BoxCollider2D boxCollider2D;
 
     void Awake()
     {
@@ -53,6 +52,7 @@ public class EnemyMove : MonoBehaviour
         
         Move();
         CheckForGround();
+        CheckForWall();
         DetectPlayer();
         
     }
@@ -72,24 +72,41 @@ public class EnemyMove : MonoBehaviour
     //전방에 PlatForm, 즉 바닥이 존재하는지 판단하는 함수
     void CheckForGround()
     {
-        if(followPlayer){
-            Vector2 frontVec = new Vector2(rigid.position.x + nextDirection * 0.4f, rigid.position.y);
-            Debug.DrawRay(frontVec, Vector3.down, new Color(0, 1, 0));
-            rayHit = Physics2D.Raycast(frontVec, Vector3.down, 1f, LayerMask.GetMask("PlatForm"));
-        }else{
-            Vector2 frontVec = new Vector2(rigid.position.x + nextDirection * 0.4f, rigid.position.y);
-            Debug.DrawRay(frontVec, Vector3.down, new Color(0, 1, 0));
-            rayHit = Physics2D.Raycast(frontVec, Vector3.down, 1f, LayerMask.GetMask("PlatForm"));
-        }
+        
+        Vector2 frontVec = new Vector2(rigid.position.x + nextDirection * 0.4f, rigid.position.y);
+        Debug.DrawRay(frontVec, Vector3.down, new Color(0, 1, 0));
+        rayHit = Physics2D.Raycast(frontVec, Vector3.down, 1f, LayerMask.GetMask("PlatForm"));
+        
         noPlatForm = rayHit.collider == null;
         
         if (noPlatForm)
         {
             int next = Random.Range(-1, 1);
-
+            Debug.Log("there is no PlatForm");
             nextDirection *= next;// 바닥이 없으면 방향 전환
         }
     }
+
+    void CheckForWall()
+    {
+        Vector2 frontVec = rigid.position + (Vector2.right * nextDirection)+Vector2.up * 0.3f; // 적 개체가 바라보는 방향으로 레이캐스트 시작 위치 설정
+        Debug.DrawRay(new Vector2(rigid.position.x, rigid.position.y+0.2f), Vector2.right * nextDirection, new Color(1, 0, 0)); // 디버그용 레이 그리기
+        
+        checkWall = Physics2D.Raycast(rigid.position, Vector2.right * nextDirection, 0.8f, LayerMask.GetMask("PlatForm")); // 바닥을 감지할 때까지 레이캐스트 쏘기
+        
+        isWall = checkWall.collider != null; // 벽이 있는지 여부 확인
+        
+        if (isWall)
+        {
+            Debug.Log("there is wall");
+            int next = Random.Range(-1, 1); 
+
+            nextDirection *= next; // 방향 변경
+        }
+    }
+
+
+    
 
     //플레이어를 인식하는 함수
     void DetectPlayer()
@@ -109,16 +126,12 @@ public class EnemyMove : MonoBehaviour
             
             frontRayHit = Physics2D.Raycast(rigid.position, front, 10.0f, LayerMask.GetMask("Player"));
         }else{
-            Debug.DrawRay(rigid.position, Vector2.left, new Color(0, 0, 1));
-            Debug.DrawRay(rigid.position, Vector2.right, new Color(0, 0, 1));
+            Debug.DrawRay(rigid.position, Vector2.left * 10f, new Color(0, 0, 1));
+            Debug.DrawRay(rigid.position, Vector2.right * 10f, new Color(0, 0, 1));
             frontRayHit = Physics2D.Raycast(rigid.position, Vector2.left, 10.0f, LayerMask.GetMask("Player"));
             frontRayHit2 = Physics2D.Raycast(rigid.position, Vector2.right, 10.0f, LayerMask.GetMask("Player"));
         }       
-        checkWall = Physics2D.Raycast(rigid.position, front, boxSize.x/2, LayerMask.GetMask("PlatForm"));
-        float wallPlace = 0;
-        if(checkWall.collider != null){
-            wallPlace = checkWall.point.x;
-        }
+        
         if ((frontRayHit.collider != null && !noPlatForm) || (frontRayHit2.collider != null && !noPlatForm))
         {
             if (!followPlayer)
@@ -136,18 +149,15 @@ public class EnemyMove : MonoBehaviour
             if (Mathf.Abs(playerY - platformY) > 1f)
             {
                 // 플레이어와 플랫폼의 y 축 위치가 차이가 크면 추적 중지
-                Debug.Log("Player is on another place");
                 followPlayer = false;
                 return;
-            }else{
-                Debug.Log("Player is on almost same place");
             }
         }
         }
 
         void MoveTowardsPlayer()
         {
-            if (player != null && followPlayer && !noPlatForm)
+            if (player != null && followPlayer && !noPlatForm && !isWall)
             {
                 Vector2 directionVec = ((Vector2)player.transform.position - rigid.position).normalized;
                 // Y 축 이동을 없애고 싶다면, directionVec의 y를 0으로 설정
@@ -157,6 +167,14 @@ public class EnemyMove : MonoBehaviour
             }
             else
             {
+                if (isWall)
+                {
+                    Debug.Log("there is wall");
+                    isFoundPlayer = false;
+                    followPlayer = false;
+                    frontRayHit = new RaycastHit2D();
+                    frontRayHit2 = new RaycastHit2D();
+                }
                 if (noPlatForm)
                 {
                     Debug.Log("no platform there");
@@ -165,6 +183,7 @@ public class EnemyMove : MonoBehaviour
                     frontRayHit = new RaycastHit2D();
                     frontRayHit2 = new RaycastHit2D();
                 }
+                
                 nextDirection = 0;
                 CancelInvoke();
 
